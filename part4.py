@@ -97,7 +97,7 @@ class CamShiftTracker:
             self.drag_start2 = None
             self.track_window2 = self.selection2
 
-        if self.drag_start:
+        if self.drag_start2:
             xmin = min(x, self.drag_start2[0])
             ymin = min(y, self.drag_start2[1])
             xmax = max(x, self.drag_start2[0])
@@ -123,26 +123,34 @@ class CamShiftTracker:
                 camshift = cv.CamShift(backproject, self.track_window, STOP_CRITERIA)
                 (iters, (area, value, rect), track_box) = camshift
                 self.track_window = rect
-
-            if self.drag_start and is_rect_nonzero(self.selection):
-                self.draw_mouse_drag_area(frame)
-                self.recompute_histogram(hist)
-            elif self.track_window and is_rect_nonzero(self.track_window):
-                cv.EllipseBox(frame, track_box, cv.CV_RGB(255, 0, 0), 3, cv.CV_AA, 0)
-                
+            
             backproject2 = cv.CreateImage(cv.GetSize(frame), 8, 1)
             cv.CalcArrBackProject([self.hue], backproject2, hist2)
             if self.track_window2 and is_rect_nonzero(self.track_window2):
-                camshift = cv.CamShift(backproject2, self.track_window2, STOP_CRITERIA)
-                (iters, (area2, value2, rect2), track_box2) = camshift
+                camshift2 = cv.CamShift2(backproject2, self.track_window2, STOP_CRITERIA)
+                (iters2, (area2, value2, rect2), track_box2) = camshift2
                 self.track_window2= rect2
+            
+            if self.drag_start and is_rect_nonzero(self.selection):
+                print "yo"
+                self.draw_mouse_drag_area(frame,self.selection)
+                self.recompute_histogram(hist)
+            elif self.track_window and is_rect_nonzero(self.track_window):
+                cv.EllipseBox(frame, track_box, cv.CV_RGB(255, 0, 0), 3, cv.CV_AA, 0)
+            else:
+                print "is_rect_nonzero(self.selection)" + str(self.selection)
 
             if self.drag_start2 and is_rect_nonzero(self.selection2):
-                self.draw_mouse_drag_area2(frame)
+                print "cool"
+                self.draw_mouse_drag_area(frame,self.selection2)
                 self.recompute_histogram(hist2)
             elif self.track_window2 and is_rect_nonzero(self.track_window2):
                 cv.EllipseBox(frame, track_box2, cv.CV_RGB(0, 255, 0), 3, cv.CV_AA, 0)
+            else:
+                print "is_rect_nonzero(self.selection2)" + str(self.selection2)
 
+            
+            
             if track_box:
                 self.update_message(track_box,track_box2)
                 sock.send(json.dumps(self.message) + "\n")
@@ -162,28 +170,27 @@ class CamShiftTracker:
         self.hue = cv.CreateImage(cv.GetSize(frame), 8, 1)
         cv.Split(hsv, self.hue, None, None, None)
 
-    def draw_mouse_drag_area(self, frame):
+    def draw_mouse_drag_area(self, frame,selection):
         """ Highlight the current selected rectangle
         """
-        sub = cv.GetSubRect(frame, self.selection)
+        print "draw target1"
+        sub = cv.GetSubRect(frame, selection)
         save = cv.CloneMat(sub)
         cv.ConvertScale(frame, frame, 0.5)
         cv.Copy(save, sub)
-        x, y, w, h = self.selection
+        x, y, w, h = selection
         cv.Rectangle(frame, (x, y), (x+w, y+h), (255, 255, 255))
         
-    def draw_mouse_drag_area2(self, frame):
-        """ Highlight the current selected rectangle
-        """
-        sub = cv.GetSubRect(frame, self.selection2)
-        save = cv.CloneMat(sub)
-        cv.ConvertScale(frame, frame, 0.5)
-        cv.Copy(save, sub)
-        x, y, w, h = self.selection2
-        cv.Rectangle(frame, (x, y), (x+w, y+h), (255, 255, 255))
 
     def recompute_histogram(self, hist):
         sel = cv.GetSubRect(self.hue, self.selection)
+        cv.CalcArrHist([sel], hist, 0)
+        (_, max_val, _, _) = cv.GetMinMaxHistValue(hist)
+        if max_val != 0:
+            cv.ConvertScale(hist.bins, hist.bins, 255. / max_val)
+            
+    def recompute_histogram2(self, hist):
+        sel = cv.GetSubRect(self.hue, self.selection2)
         cv.CalcArrHist([sel], hist, 0)
         (_, max_val, _, _) = cv.GetMinMaxHistValue(hist)
         if max_val != 0:
