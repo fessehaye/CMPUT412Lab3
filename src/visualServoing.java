@@ -85,6 +85,7 @@ public class visualServoing extends JPanel{
 		while(!keyESC){
 			keyPress = false;
 
+			//wiggle
 			MotorC.rotateTo(0);
 			MotorF.rotateTo(90);
 			xi = (int)tracker.x;
@@ -162,6 +163,9 @@ public class visualServoing extends JPanel{
 		//		Jac1.print(System.out);
 		Jac2.print(System.out);
 		Jacobian = Jac2;
+
+		double[][] ljuPoints = {{tracker.x},{tracker.y}};
+		lastJacUpdate = new Matrix(ljuPoints);
 	}
 
 
