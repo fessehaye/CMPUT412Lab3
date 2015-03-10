@@ -11,11 +11,14 @@ import javax.swing.JFrame;
 import javax.swing.JPanel;
 
 import lejos.utility.Matrix;
-import lejos.utility.Delay;
 import lejos.remote.ev3.RMIRegulatedMotor;
 import lejos.remote.ev3.RemoteEV3;
 
 public class visualServoing extends JPanel{
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
 	public static TrackerReader tracker  = new TrackerReader();
 	public static RemoteEV3 ev3;
 	public static double threshold = 10;
@@ -23,7 +26,7 @@ public class visualServoing extends JPanel{
 	public static double alpha = 1;
 	public static boolean keyPress = false;
 	public static boolean keyESC = false;
-	public static Matrix e,q,Jacobian;
+	public static Matrix e,q,Jacobian,dQ,lastJacUpdate;
 
 	public visualServoing() {
 		KeyListener listener = new MyKeyListener();
@@ -78,7 +81,6 @@ public class visualServoing extends JPanel{
 		System.out.println("Thumbs up");
 
 		int xi, yi, xcf, ycf, xff, yff;
-		int i = 0;
 
 		while(!keyESC){
 			keyPress = false;
@@ -104,15 +106,23 @@ public class visualServoing extends JPanel{
 				e = new Matrix(sPoints);
 				//				System.out.println("ex:" + e.get(0,0) + " ey:" + e.get(1,0));
 
-				//borydian update
-				double qx = Math.abs(q.get(0,0));
-				double qy = Math.abs(q.get(1,0));
+				//checkborydian update
+				double qx = Math.abs(dQ.get(0,0));
+				double qy = Math.abs(dQ.get(1,0));
 				if( qx<1 && qy<1 && qx>0 && qy>0 ){
 					borydianUpdate();
 				}
-				borydianUpdate();
+				
+				//check for borydian update
+				double[][] mPoints = {{tracker.x-lastJacUpdate.get(0,0)},{tracker.y-lastJacUpdate.get(1,0)}};
+				Matrix m = new Matrix(mPoints);
+				double mx = Math.abs(m.get(0,0));
+				double my = Math.abs(m.get(1,0));
+				if( mx>=threshold || my>=threshold ){
+					borydianUpdate();
+				}
 
-				Matrix dQ = Jacobian.times(e.times((-1)*lamda));
+				dQ = Jacobian.times(e.times((-1)*lamda));
 				q.plusEquals(dQ);
 
 				//				System.out.println("dQc:" + dQ.get(0,0) + " dQf:" + dQ.get(1, 0));
@@ -124,7 +134,6 @@ public class visualServoing extends JPanel{
 					break;
 				}
 
-				i++;
 			}
 			System.in.read();
 		}
@@ -140,11 +149,11 @@ public class visualServoing extends JPanel{
 
 	public static void borydianUpdate(){
 
-		Matrix qt = q.transpose();
-		Matrix jq = Jacobian.times(q);
+		Matrix qt = dQ.transpose();
+		Matrix jq = Jacobian.times(dQ);
 		Matrix sjq = jq.minus(jq);
 		Matrix top = sjq.times(qt);
-		Matrix bottom = qt.times(q);
+		Matrix bottom = qt.times(dQ);
 		double bi = bottom.get(0,0);
 		Matrix wa = top.times(alpha/bi);
 		Matrix Jac2 = Jacobian.plus(wa);
@@ -184,8 +193,10 @@ public class visualServoing extends JPanel{
 
 	public static void reset(int xi, int yi, int xcf, int ycf, int xff, int yff){
 		double[][] qPoints = {{0},{90}};
-
 		q = new Matrix(qPoints);
+		
+		double[][] dQPoints = {{0},{0}};
+		dQ = new Matrix(dQPoints);
 
 		double[][] jacPoints = {{xcf-xi,xff-xi},{ycf-yi,yff-yi}};
 		Jacobian = new Matrix(jacPoints);
@@ -194,5 +205,8 @@ public class visualServoing extends JPanel{
 
 		double[][] ePoints = {{tracker.x-tracker.targetx},{tracker.y-tracker.targety}};
 		e = new Matrix(ePoints);
+
+		double[][] ljuPoints = {{tracker.x},{tracker.y}};
+		lastJacUpdate = new Matrix(ljuPoints);
 	}
 }
