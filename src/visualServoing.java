@@ -28,6 +28,7 @@ public class visualServoing extends JPanel{
 	public static boolean keyESC = false;
 	public static Matrix e,q,Jacobian,dQ,lastJacUpdate;
 
+	//adding listeners for anykey
 	public visualServoing() {
 		KeyListener listener = new MyKeyListener();
 		addKeyListener(listener);
@@ -36,6 +37,7 @@ public class visualServoing extends JPanel{
 
 	public static void main (String[] args) throws RemoteException, IOException {
 
+		//anykey frame
 		JFrame frame = new JFrame("Press buttons here");
 		visualServoing vs = new visualServoing();
 		frame.add(vs);
@@ -56,7 +58,7 @@ public class visualServoing extends JPanel{
 			e.printStackTrace();
 		}
 
-
+		//define motors
 		RMIRegulatedMotor MotorF = ev3.createRegulatedMotor("A", 'L');
 		RMIRegulatedMotor MotorC = ev3.createRegulatedMotor("B", 'L');
 
@@ -82,6 +84,7 @@ public class visualServoing extends JPanel{
 
 		int xi, yi, xcf, ycf, xff, yff;
 
+		//loop while esc has not been pressed
 		while(!keyESC){
 			keyPress = false;
 
@@ -99,8 +102,10 @@ public class visualServoing extends JPanel{
 			yff = (int)tracker.y;
 			MotorF.rotateTo(90);
 
+			//resets jacobian and other variables
 			reset(xi, yi, xcf, ycf, xff, yff);
 
+			//loop while arm is not within threshold
 			while(Math.abs(e.get(0, 0))>threshold || Math.abs(e.get(1, 0))>threshold){
 
 				double[][] sPoints = {{tracker.x-tracker.targetx},{tracker.y-tracker.targety}};
@@ -118,25 +123,30 @@ public class visualServoing extends JPanel{
 				Matrix m = new Matrix(mPoints);
 				double mx = Math.abs(m.get(0,0));
 				double my = Math.abs(m.get(1,0));
+				//borydian update occurs once pixel threshold has been met since last update
 				if( mx>=threshold || my>=threshold ){
 					borydianUpdate();
 				}
 
+				//computes change in q
 				dQ = Jacobian.times(e.times((-1)*lamda));
 				q.plusEquals(dQ);
 
-
+				//motor move for change in q
 				MotorC.rotateTo((int) q.get(0,0)*7);
 				MotorF.rotateTo((int) q.get(1,0));
 
+				//break loop if key press --if esc exit
 				if(keyPress){
 					break;
 				}
 
 			}
+			// waits for enter key to reset for next round or exit
 			System.in.read();
 		}
 
+		//resets arm when exiting
 		MotorC.rotateTo(0);
 		MotorF.rotateTo(0);
 
@@ -147,7 +157,7 @@ public class visualServoing extends JPanel{
 	}
 
 	public static void borydianUpdate(){
-
+		//line by line equations for borydian
 		Matrix qt = dQ.transpose();
 		Matrix jq = Jacobian.times(dQ);
 		Matrix sjq = jq.minus(jq);
@@ -157,15 +167,15 @@ public class visualServoing extends JPanel{
 		Matrix wa = top.times(alpha/bi);
 		Matrix Jac2 = Jacobian.plus(wa);
 		
-		Jac2.print(System.out);
 		Jacobian = Jac2;
 
+		//updates the position of the jacobian update
 		double[][] ljuPoints = {{tracker.x},{tracker.y}};
 		lastJacUpdate = new Matrix(ljuPoints);
 	}
 
 
-
+//anykey listeners for jframe
 	public class MyKeyListener implements KeyListener {
 
 
@@ -192,6 +202,7 @@ public class visualServoing extends JPanel{
 	}
 
 	public static void reset(int xi, int yi, int xcf, int ycf, int xff, int yff){
+		//initializes variables for a trial
 		double[][] qPoints = {{0},{90}};
 		q = new Matrix(qPoints);
 		
@@ -200,8 +211,6 @@ public class visualServoing extends JPanel{
 
 		double[][] jacPoints = {{xcf-xi,xff-xi},{ycf-yi,yff-yi}};
 		Jacobian = new Matrix(jacPoints);
-
-		Jacobian.print(System.out);
 
 		double[][] ePoints = {{tracker.x-tracker.targetx},{tracker.y-tracker.targety}};
 		e = new Matrix(ePoints);
