@@ -47,9 +47,10 @@ class CamShiftTracker:
         cv.NamedWindow(CAM_WINDOW, 1)
         cv.NamedWindow(HISTOGRAM_WINDOW, 1)
         cv.SetMouseCallback(CAM_WINDOW, self.on_mouse)
-
-        self.target_x = int(height / 2)
-        self.target_y = int(width / 2)
+        #green
+        self.target_x = 0
+        self.target_y = 0
+        #red
         self.tracker_center_x = 0
         self.tracker_center_y = 0
         self.drag_start = None      # Set to (x,y) when mouse starts drag
@@ -57,8 +58,9 @@ class CamShiftTracker:
         self.selection = None
         self.drag_start2 = None      # Set to (x,y) when mouse starts drag
         self.track_window2 = None    # Set to rect when the mouse drag finishes
-        self.selection2 = None
+        self.selection2 = None        
         self.hue = None
+        self.hue2 = None
         self.quit = False
         self.backproject_mode = False
         self.message = {}
@@ -73,7 +75,7 @@ class CamShiftTracker:
     def on_mouse(self, event, x, y, *args):
         if event in [cv.CV_EVENT_LBUTTONDOWN, cv.CV_EVENT_LBUTTONUP, cv.CV_EVENT_MOUSEMOVE]:
             self.left_mouse_click(event, x, y)
-        elif event in [cv.CV_EVENT_RBUTTONDOWN, cv.CV_EVENT_RBUTTONUP, cv.CV_EVENT_MOUSEMOVE]:
+        if event in [cv.CV_EVENT_RBUTTONDOWN, cv.CV_EVENT_RBUTTONUP, cv.CV_EVENT_MOUSEMOVE]:
             self.right_mouse_click(event, x, y)
 
     def left_mouse_click(self, event, x, y):
@@ -102,7 +104,7 @@ class CamShiftTracker:
             ymin = min(y, self.drag_start2[1])
             xmax = max(x, self.drag_start2[0])
             ymax = max(y, self.drag_start2[1])
-            self.selection2 = (xmin, ymin, xmax - xmin, ymax - ymin)
+            self.selection2 = (xmin, ymin, xmax - xmin, ymax - ymin)    
 
     def run(self):
         hist = cv.CreateHist([180], cv.CV_HIST_ARRAY, [(0, 180)], 1)
@@ -112,9 +114,11 @@ class CamShiftTracker:
         sock.connect((HOST, PORT))
         while not self.quit:
             frame = cv.QueryFrame(self.capture)
+            frame2 = cv.QueryFrame(self.capture)
             track_box = None
             track_box2 = None
             self.update_hue(frame)
+            self.update_hue2(frame)
 
             # Compute back projection
             backproject = cv.CreateImage(cv.GetSize(frame), 8, 1)
@@ -123,41 +127,34 @@ class CamShiftTracker:
                 camshift = cv.CamShift(backproject, self.track_window, STOP_CRITERIA)
                 (iters, (area, value, rect), track_box) = camshift
                 self.track_window = rect
-            
-            backproject2 = cv.CreateImage(cv.GetSize(frame), 8, 1)
-            cv.CalcArrBackProject([self.hue], backproject2, hist2)
+                
+            backproject2 = cv.CreateImage(cv.GetSize(frame2), 8, 1)
+            cv.CalcArrBackProject([self.hue2], backproject2, hist2)
             if self.track_window2 and is_rect_nonzero(self.track_window2):
-                camshift2 = cv.CamShift2(backproject2, self.track_window2, STOP_CRITERIA)
-                (iters2, (area2, value2, rect2), track_box2) = camshift2
-                self.track_window2= rect2
+                camshift2 = cv.CamShift(backproject2, self.track_window2, STOP_CRITERIA)
+                (iters, (area, value, rect), track_box2) = camshift2
+                self.track_window2 = rect
             
             if self.drag_start and is_rect_nonzero(self.selection):
-                print "yo"
                 self.draw_mouse_drag_area(frame,self.selection)
                 self.recompute_histogram(hist)
             elif self.track_window and is_rect_nonzero(self.track_window):
                 cv.EllipseBox(frame, track_box, cv.CV_RGB(255, 0, 0), 3, cv.CV_AA, 0)
-            else:
-                print "is_rect_nonzero(self.selection)" + str(self.selection)
-
+                
             if self.drag_start2 and is_rect_nonzero(self.selection2):
-                print "cool"
-                self.draw_mouse_drag_area(frame,self.selection2)
+                
+                self.draw_mouse_drag_area(frame2,self.selection2)
                 self.recompute_histogram(hist2)
             elif self.track_window2 and is_rect_nonzero(self.track_window2):
-                cv.EllipseBox(frame, track_box2, cv.CV_RGB(0, 255, 0), 3, cv.CV_AA, 0)
-            else:
-                print "is_rect_nonzero(self.selection2)" + str(self.selection2)
+                cv.EllipseBox(frame2, track_box2, cv.CV_RGB(0, 255, 0), 3, cv.CV_AA, 0)            
 
-            
-            
             if track_box:
-                self.update_message(track_box,track_box2)
+                self.update_message(track_box)
                 sock.send(json.dumps(self.message) + "\n")
             self.draw_target(frame, track_box)
             self.update_windows(frame, backproject, hist)
-            self.draw_target(frame, track_box2)
-            self.update_windows(frame, backproject2, hist2)
+            self.draw_target2(frame2, track_box2)
+            self.update_windows(frame2, backproject2, hist2)            
             self.handle_keyboard_input()
             track_box = None
             track_box2 = None
@@ -169,11 +166,18 @@ class CamShiftTracker:
         cv.CvtColor(frame, hsv, cv.CV_BGR2HSV)
         self.hue = cv.CreateImage(cv.GetSize(frame), 8, 1)
         cv.Split(hsv, self.hue, None, None, None)
+        
+    def update_hue2(self, frame):
+        """ Convert frame to HSV and keep the hue
+        """
+        hsv = cv.CreateImage(cv.GetSize(frame), 8, 3)
+        cv.CvtColor(frame, hsv, cv.CV_BGR2HSV)
+        self.hue2 = cv.CreateImage(cv.GetSize(frame), 8, 1)
+        cv.Split(hsv, self.hue2, None, None, None)    
 
     def draw_mouse_drag_area(self, frame,selection):
         """ Highlight the current selected rectangle
         """
-        print "draw target1"
         sub = cv.GetSubRect(frame, selection)
         save = cv.CloneMat(sub)
         cv.ConvertScale(frame, frame, 0.5)
@@ -184,13 +188,6 @@ class CamShiftTracker:
 
     def recompute_histogram(self, hist):
         sel = cv.GetSubRect(self.hue, self.selection)
-        cv.CalcArrHist([sel], hist, 0)
-        (_, max_val, _, _) = cv.GetMinMaxHistValue(hist)
-        if max_val != 0:
-            cv.ConvertScale(hist.bins, hist.bins, 255. / max_val)
-            
-    def recompute_histogram2(self, hist):
-        sel = cv.GetSubRect(self.hue, self.selection2)
         cv.CalcArrHist([sel], hist, 0)
         (_, max_val, _, _) = cv.GetMinMaxHistValue(hist)
         if max_val != 0:
@@ -209,7 +206,7 @@ class CamShiftTracker:
             self.quit = True
         elif c == ord("b"):
             self.backproject_mode = not self.backproject_mode
-
+       
 
     def draw_target(self, frame, track_box):
         if track_box:
@@ -222,18 +219,32 @@ class CamShiftTracker:
                 tracker_center_x = int(self.tracker_center_x)
                 tracker_center_y = int(self.tracker_center_y)
                 cv.Circle(frame, (tracker_center_x, tracker_center_y), 5, CENTROID_COLOR, 1)
+                
+                
+    def draw_target2(self, frame, track_box):
+        if track_box:
+            self.target_x = float(min(frame.width, max(0, track_box[0][0] - track_box[1][0] / 2)) + \
+                    track_box[1][0] / 2)
+            self.target_y = float(min(frame.height, max(0, track_box[0][1] - track_box[1][1] / 2)) + \
+                    track_box[1][1] / 2)
 
-        cv.Circle(frame, (self.target_x, self.target_y), 5, CENTROID_COLOR, 2)
-        target_ellipse = ((self.target_x, self.target_y), (75, 75), 0.0)
-        cv.EllipseBox(frame, target_ellipse, cv.CV_RGB(*TARGET_ELLIPSE_COLOR), 5, cv.CV_AA, 0 )
+            if not math.isnan(self.target_x) and not math.isnan(self.target_y):
+                tracker_center_x = int(self.target_x)
+                tracker_center_y = int(self.target_y)
+                cv.Circle(frame, (tracker_center_x, tracker_center_y), 5, CENTROID_COLOR, 1)
 
-    def update_message(self, track_box,track_box2):
+
+
+       
+
+    def update_message(self, track_box):
         self.message['x'] = float(self.tracker_center_x)
         self.message['y'] = float(self.tracker_center_y)
         self.message['a'] = float(track_box[1][0]) * float(track_box[1][1])
         self.message['theta'] = float(track_box[2])
         self.message['targetx'] = float(self.target_x)
         self.message['targety'] = float(self.target_y)
+        
 
 
 if __name__ == "__main__":

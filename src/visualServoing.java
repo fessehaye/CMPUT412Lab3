@@ -21,7 +21,7 @@ public class visualServoing extends JPanel{
 	private static final long serialVersionUID = 1L;
 	public static TrackerReader tracker  = new TrackerReader();
 	public static RemoteEV3 ev3;
-	public static double threshold = 10;
+	public static double threshold = 50;
 	public static double lamda = .001;
 	public static double alpha = 1;
 	public static boolean keyPress = false;
@@ -69,7 +69,7 @@ public class visualServoing extends JPanel{
 
 		try 
 		{ 
-			Process p=Runtime.getRuntime().exec("python tracker.py"); 
+			Process p=Runtime.getRuntime().exec("python part4.py"); 
 		}
 		catch (IOException e) {
 			// TODO Auto-generated catch block
