@@ -125,7 +125,6 @@ public class visualServoing extends JPanel{
 				dQ = Jacobian.times(e.times((-1)*lamda));
 				q.plusEquals(dQ);
 
-				//				System.out.println("dQc:" + dQ.get(0,0) + " dQf:" + dQ.get(1, 0));
 
 				MotorC.rotateTo((int) q.get(0,0)*7);
 				MotorF.rotateTo((int) q.get(1,0));
@@ -157,9 +156,7 @@ public class visualServoing extends JPanel{
 		double bi = bottom.get(0,0);
 		Matrix wa = top.times(alpha/bi);
 		Matrix Jac2 = Jacobian.plus(wa);
-		//		Matrix Jac1 = Jacobian.plus( ((e.minus(Jacobian.times(q))).times(q.transpose())).times((q.times(q.transpose())).inverse()).times(alpha) );
-
-		//		Jac1.print(System.out);
+		
 		Jac2.print(System.out);
 		Jacobian = Jac2;
 
